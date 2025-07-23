@@ -1,162 +1,121 @@
-# 🏗️ Three-Tier Web Application Architecture on AWS (Hands-On Project)
+# 🏗️ 3-Tier Architecture Project on AWS (Free Tier)
 
-This README outlines a **complete real-world AWS project** that demonstrates deploying a **secure, scalable, and highly available 3-tier web application** infrastructure, strictly using the **AWS Free Tier**. This project includes **both console and CLI commands**, and is crafted to match **industry standards**.
+This project demonstrates a complete **3-tier architecture** built using **only AWS Console** and strictly within the **Free Tier limits**. It includes:
 
----
-
-## 📌 Project Objectives
-
-* 🛠️ Build an end-to-end 3-tier architecture (Web, App, DB)
-* 🌐 Host frontend (nginx) and backend (Node.js + Express) using EC2
-* 💾 Use MySQL RDS as backend database (Free Tier eligible)
-* ☁️ Store uploaded files securely in S3
-* ⚖️ Balance traffic using Application Load Balancer (External + Internal)
-* 📈 Implement Auto Scaling for high availability
-* 🔒 Configure IAM, NACL, SG for secure networking
+- Public Web Tier (EC2 + Load Balancer)
+- Private Application Tier (EC2 + Internal Load Balancer)
+- Private Database Tier (RDS)
+- VPC with subnets, route tables, security groups, and NACLs
+- Monitoring with CloudWatch
+- Optional: Logging to S3 via Kinesis Firehose
 
 ---
 
+## 📌 Architecture Diagram
 
-### ✳️ Layers:
+![Architecture Diagram](./screenshots/aws-3tier-diagram.png)
 
-* **Web Tier**: Public EC2 instances with nginx
-* **App Tier**: Private EC2 instances with Node.js backend
-* **DB Tier**: Private RDS MySQL instance
 
-### 🔧 AWS Services Used:
+## 🚀 Services Used
 
-* **VPC**, **Subnets** (6 total)
-* **EC2 Instances** (Amazon Linux 2)
-* **Application Load Balancers** (External + Internal)
-* **Auto Scaling Group** with Launch Template
-* **Amazon RDS** (MySQL - Free Tier)
-* **S3 Bucket** (for file uploads)
-* **IAM Role** for S3 access
-* **Security Groups** & **Network ACLs**
+| Tier        | AWS Services                              |
+|-------------|-------------------------------------------|
+| Web Tier    | EC2 (Amazon Linux), ALB, Security Groups  |
+| App Tier    | EC2 (Private Subnet), Internal ALB        |
+| DB Tier     | Amazon RDS (MySQL), Subnet Group          |
+| Networking  | VPC, Subnets, Route Tables, NACLs         |
+| Monitoring  | CloudWatch Logs, Alarms                   |
+| Logging     | (Optional) Kinesis Firehose, S3           |
 
 ---
 
-## 🏁 Step-by-Step Implementation
+## 📍 CIDR Blocks and Subnets
 
-### 1. 🌐 VPC and Subnets Creation
+- **VPC CIDR**: `10.0.0.0/16`
 
-* VPC CIDR: `10.0.0.0/16`
-* AZs: `ap-south-1a`, `ap-south-1b`
-* Subnets:
+| Tier       | Subnet AZ1         | Subnet AZ2         |
+|------------|--------------------|--------------------|
+| Web Tier   | 10.0.1.0/24        | 10.0.4.0/24        |
+| App Tier   | 10.0.2.0/24        | 10.0.5.0/24        |
+| DB Tier    | 10.0.3.0/24        | 10.0.6.0/24        |
 
-  * Web Tier: `10.0.1.0/24`, `10.0.4.0/24`
-  * App Tier: `10.0.2.0/24`, `10.0.5.0/24`
-  * DB Tier: `10.0.3.0/24`, `10.0.6.0/24`
+---
 
-### 2. 🚪 Internet Gateway + Route Tables
+## 🛡️ Network ACLs
 
-* Attach IGW to VPC
-* Create public route table (route to IGW)
-* Create private route table (with NAT Gateway)
-* Associate route tables with corresponding subnets
+| Tier        | Inbound Rules                          | Outbound Rules                         |
+|-------------|----------------------------------------|----------------------------------------|
+| Web Tier    | Allow HTTP(80), HTTPS(443), SSH(22)    | Allow All                              |
+| App Tier    | Allow from Web Tier subnet only        | Allow to DB Tier only                  |
+| DB Tier     | Allow MySQL(3306) from App Tier only   | Deny All (For security)                |
 
-### 3. 📦 S3 Bucket
+---
 
-```bash
-aws s3 mb s3://my-app-bucket --region ap-south-1
-```
+## 🔐 Security Groups
 
-* Enable Versioning
-* Block All Public Access
-* Add bucket policy to allow access from EC2 IAM role only
+| Component        | Inbound Allowed From            |
+|------------------|---------------------------------|
+| Web EC2          | 0.0.0.0/0 (HTTP, HTTPS, SSH)    |
+| App EC2          | Web SG                          |
+| RDS              | App SG                          |
+| ALB (Web)        | 0.0.0.0/0                       |
+| ALB (Internal)   | Web SG                          |
 
-### 4. 🔐 IAM Role for EC2 (App Tier)
+---
 
-* Create role with `AmazonS3FullAccess`
-* Attach to App EC2s
+## 🧱 Key Resources Created
 
-### 5. 🛡️ Security Groups
+- **VPC** with 6 subnets (3 tiers × 2 AZs)
+- **2 ALBs**:
+  - Public for web EC2s
+  - Internal for app EC2s
+- **Auto Scaling Groups** (optional)
+- **RDS MySQL instance** in DB Tier
+- **Security groups** per layer for strict traffic control
+- **NACLs** to add an extra layer of protection between tiers
+- **CloudWatch** for monitoring
+- **Kinesis Firehose + S3** for logs (optional)
 
-* Web SG: Allow HTTP/HTTPS from internet
-* App SG: Allow traffic only from Web SG
-* DB SG: Allow MySQL (port 3306) from App SG only
+---
 
-### 6. 📊 Network ACL Rules
+## 📊 Monitoring Setup
 
-* **Web Tier Subnets:**
+- Enabled detailed monitoring on EC2 instances
+- CloudWatch Alarms for CPU > 70%
+- Log group created: `/aws/ec2/web-tier`, `/aws/ec2/app-tier`
+- Logs shipped via Kinesis Firehose to S3 bucket (`3tier-logs-bucket`)
 
-  * Inbound: Allow 80, 443 from 0.0.0.0/0
-  * Outbound: Allow all ephemeral ports
-* **App Tier Subnets:**
+---
 
-  * Inbound: Allow 3000 from Web Tier subnets
-  * Outbound: Allow port 3306 to DB Tier
-* **DB Tier Subnets:**
+## 🧪 Testing
 
-  * Inbound: Allow 3306 from App Tier only
-  * Outbound: Deny all except internal traffic
+✅ Web Tier: Access via public ALB  
+✅ App Tier: Private access only via internal ALB  
+✅ DB Tier: Access only from App EC2  
+✅ Logs visible in CloudWatch and S3  
+✅ CPU Alarm triggered when tested with `stress` tool
 
-### 7. ⚙️ EC2 Instance Launch (Web & App Tier)
+---
 
-* Use **Amazon Linux 2 AMI (Free Tier eligible)**
-* Install packages:
+## 📌 Optional Enhancements
 
-  ```bash
-  sudo yum install git nginx nodejs npm -y
-  ```
-* Attach IAM Role to App EC2
+- Add Route 53 for domain-based routing
+- Use CloudFormation or Terraform for IaC
+- Configure Auto Scaling Group for both EC2 tiers
+- Add WAF for ALB security
+- Add SNS for Alarm notifications
 
-### 8. 🚀 Node.js App Setup on App Tier
+---
 
-```bash
-git clone https://github.com/your-node-app.git
-cd your-node-app
-npm install
-npm install multer dotenv aws-sdk
-```
+## 📸 Screenshots
 
-* Run with PM2 (production ready):
+All screenshots related to each step are inside the `screenshots/` folder.
 
-```bash
-npm install -g pm2
-pm2 start app.js
-```
+---
 
-### 9. 🌐 nginx Setup on Web Tier
+## 🧾 Author Notes
 
-* Configure reverse proxy:
-
-```nginx
-location /api/ {
-  proxy_pass http://<Internal-ALB-DNS>;
-}
-```
-
-* Restart nginx:
-
-```bash
-sudo systemctl restart nginx
-```
-
-### 10. 🧱 RDS MySQL Setup
-
-* MySQL (Free Tier)
-* Public Access: Disabled
-* Subnet Group: Select DB Tier subnets
-* DB SG: MySQL access only from App SG
-
-### 11. ⚖️ Application Load Balancers
-
-* **External ALB**:
-
-  * Routes internet traffic to Web Tier EC2s
-  * Listeners: HTTP (80)
-* **Internal ALB**:
-
-  * Routes internal traffic to App Tier EC2s
-  * Listener: HTTP (3000 or app port)
-
-### 12. 📈 Auto Scaling Group + Launch Template
-
-* Create Launch Template for App EC2
-* User-data script for app installation
-* Create ASG linked to Internal ALB Target Group
-* Define Scaling Policies based on CPU utilization
+This project was created strictly using AWS Free Tier resources. No paid services were used. Please double-check region-based limits before trying in production environments.
 
 ---
 
